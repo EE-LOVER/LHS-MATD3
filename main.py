@@ -8,6 +8,7 @@ Created on Sun Oct 16 23:16:37 2022
 import numpy as np
 from MATD3_models import MATD3
 from MADDPG_models import MADDPG
+from MAPPO_models import MAPPO
 from make_case import case_2
 #import matplotlib.pyplot as plt
 import pandas as pd
@@ -17,6 +18,7 @@ if __name__ == '__main__':
 
     agents = MATD3(case)
     #agents = MADDPG(case)
+    #agents = MAPPO(case)
 
     noise_std = 0.4 # the std of Gaussian noise for exploration
     noise_std_min = 0.0005
@@ -30,6 +32,9 @@ if __name__ == '__main__':
     
     # mean action final
     a_G = agents.choose_action_random_G()
+    #if MAPPO, use this:
+    #a_G, a_logprob = agents.choose_action_random_G(np.random.rand(case.state_dim_G))
+
     r, s, s2, income, p1, p2, p3, p4 = case.step_forward(a_G)
     
     capacity_record = np.empty(shape=(case.producer_num,case.thermal_types+case.wind_types,0))
@@ -47,6 +52,7 @@ if __name__ == '__main__':
     E_price_record = np.append(E_price_record, p4)
     
     while total_steps < max_train_steps:
+
         if total_steps <= random_steps:  # Take random actions in the beginning for the better exploration
             a_G = agents.choose_action_random_G()
         else:
@@ -57,6 +63,18 @@ if __name__ == '__main__':
                 a_G = agents.choose_action_G(s)
         r, s_, s2_, income, p1, p2, p3, p4 = case.step_forward(a_G)
 
+        # if MAPPO, use this:
+        '''
+        if total_steps <= random_steps:  # Take random actions in the beginning for the better exploration
+            a_G, a_logprob = agents.choose_action_random_G(s)
+        else:
+            if total_steps <= no_noise_steps:
+                # Add Gaussian noise to action for exploration
+                a_G, a_logprob = agents.choose_action_with_noise_G(s, noise_std)
+            else:
+                a_G, a_logprob = agents.choose_action_G(s)
+        r, s_, s2_, income, p1, p2, p3, p4 = case.step_forward(a_G)
+        '''
         capacity_record = np.append(capacity_record,
                                     case.exist_capacity.reshape((case.producer_num,
                                                                  case.thermal_types+case.wind_types,1)),axis = 2)
@@ -66,7 +84,9 @@ if __name__ == '__main__':
         GC_price_record = np.append(GC_price_record, p3)
         E_price_record = np.append(E_price_record, p4)
         
-        agents.replay_buffer.store(s, a_G.flatten(), r, s_, s2, s2_)  # Store the transition
+        agents.replay_buffer.store(s, a_G.flatten(), r, s_, s2, s2_)
+        # if MAPPO, use this:
+        #agents.replay_buffer.store(s, a_G.flatten(), r, s_, s2, s2_, a_logprob.flatten())
         s = s_
         s2 = s2_
         total_steps += 1
